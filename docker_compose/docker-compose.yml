@@ -1,0 +1,24 @@
+version: '3.7'
+services:
+  confighub:
+    image: confighub/confighubplatform:latest
+    ports:
+      - 8080:80
+      - 8443:443
+    env_file: 
+      - ./confighub.env
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:13.3-alpine
+    environment:
+      - POSTGRES_USER=confighub
+      - POSTGRES_PASSWORD=confighub
+      - POSTGRES_DB=confighub
+      - PGDATA=/var/lib/postgresql/data
+    volumes:
+      - ${PWD}/postgres_init:/docker-entrypoint-initdb.d
+      #- ${PWD}/postgres_data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
