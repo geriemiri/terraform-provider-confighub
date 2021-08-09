@@ -67,3 +67,4 @@ terraform.ftstate.*
 
 # Postgres
 postgres_data
+dist
