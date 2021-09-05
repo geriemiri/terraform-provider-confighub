@@ -29,3 +29,18 @@ To run the e2e test use the following command at the root of the project:
 ```shell
 make e2e
 ```
+
+## Publish manually
+
+Set the GPG_FINGERPRINT environment variable by checking with the following command:
+```shell
+gpg --list-keys
+```
+
+Build the release version of the project with the following command:
+
+```shell
+goreleaser release --skip-publish --rm-dist
+```
+
+Create a new tag and push the tag for the latest commit. Then create a new release with the latest pushed tag and attach all the zip files created in dist folder together with the files ending in SHA256SUMS and SHA256SUMS.sig
