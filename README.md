@@ -27,7 +27,7 @@ You can login to the ConfigHub by entering https://localhost:8443/ for HTTPS, an
 To run the e2e test use the following command at the root of the project:
 
 ```shell
-make e2e
+make e2e_test
 ```
 
 ## Publish manually
