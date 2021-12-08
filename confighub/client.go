@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -191,16 +192,22 @@ func (c *Client) doPushConfigProperty(pushConfigProperty PushConfigProperty, hea
 
 	log.Printf("Calling %s\n", req.URL.String())
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("unable to issue property push request: %s", err.Error())
-	}
+	var resp *http.Response
+	var respError error
 
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("cannot parse response from property push request: %s", err.Error())
+	for retry := 0; retry < 3 && (resp == nil || resp.StatusCode == 304); retry++ {
+		resp, respError = c.httpClient.Do(req)
+		if respError != nil {
+			return false, fmt.Errorf("unable to issue property push request: %s", respError.Error())
+		}
+
+		_, respError = ioutil.ReadAll(resp.Body)
+		if respError != nil {
+			return false, fmt.Errorf("cannot parse response from property push request: %s", respError.Error())
+		}
+		defer resp.Body.Close()
+		time.Sleep(time.Duration(math.Pow(2, float64(retry)+1)) * time.Second)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		return false, fmt.Errorf("property push request returned HTTP status code %d: %s", resp.StatusCode, resp.Header.Get("Etag"))
@@ -215,6 +222,7 @@ type DeletePropertyRequest struct {
 
 type DeletePropertyIdentifier struct {
 	Key    string                          `json:"key"`
+	Vdt    string                          `json:"vdt"`
 	Values []DeletePropertyIdentifierValue `json:"values"`
 }
 
@@ -242,16 +250,76 @@ func (c *Client) doDeleteProperty(deletePropertyIdentifier DeletePropertyIdentif
 
 	log.Printf("Calling %s\n", req.URL.String())
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("unable to issue property delete request: %s", err.Error())
+	var resp *http.Response
+	var respError error
+
+	for retry := 0; retry < 3 && (resp == nil || resp.StatusCode == 304); retry++ {
+		resp, respError = c.httpClient.Do(req)
+		if respError != nil {
+			return false, fmt.Errorf("unable to issue property delete request: %s", respError.Error())
+		}
+
+		_, respError = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("cannot parse response from property delete request: %s", respError.Error())
+		}
+		defer resp.Body.Close()
+		time.Sleep(time.Duration(math.Pow(2, float64(retry))) * time.Second)
+		if resp.StatusCode == 304 && resp.Header.Get("Etag") == "A relationship to another item exists, preventing this transaction." {
+			return c.doDeletePropertyForAllContext(deletePropertyIdentifier.Key, headers)
+		}
 	}
 
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("cannot parse response from property delete request: %s", err.Error())
+	if resp.StatusCode != 200 {
+		return false, fmt.Errorf("property delete request returned HTTP status code %d: %s", resp.StatusCode, resp.Header.Get("Etag"))
 	}
-	defer resp.Body.Close()
+
+	return true, nil
+}
+
+type DeletePropertyForAllContextIdentifier struct {
+	Key       string `json:"key"`
+	Operation string `json:"opp"`
+}
+
+func (c *Client) doDeletePropertyForAllContext(key string, headers http.Header) (sucess bool, err error) {
+	url := c.constructFullUrl("/rest/push")
+	deletePropertyForAllContextIdentifier := DeletePropertyForAllContextIdentifier{
+		Key: key,
+	}
+	deletePropertyRequest := DeletePropertyRequest{
+		Data: []interface{}{deletePropertyForAllContextIdentifier},
+	}
+	requestBody, err := json.Marshal(deletePropertyRequest)
+	if err != nil {
+		return false, fmt.Errorf("unable to transform property delete request to JSON: %s", err.Error())
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return false, err
+	}
+	for name, value := range headers {
+		req.Header.Add(name, strings.Join(value, ""))
+	}
+
+	log.Printf("Calling %s\n", req.URL.String())
+
+	var resp *http.Response
+	var respError error
+
+	for retry := 0; retry < 3 && (resp == nil || resp.StatusCode == 304); retry++ {
+		resp, respError = c.httpClient.Do(req)
+		if respError != nil {
+			return false, fmt.Errorf("unable to issue property delete request: %s", respError.Error())
+		}
+
+		_, respError = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("cannot parse response from property delete request: %s", respError.Error())
+		}
+		defer resp.Body.Close()
+		time.Sleep(time.Duration(math.Pow(2, float64(retry))) * time.Second)
+	}
 
 	if resp.StatusCode != 200 {
 		return false, fmt.Errorf("property delete request returned HTTP status code %d: %s", resp.StatusCode, resp.Header.Get("Etag"))

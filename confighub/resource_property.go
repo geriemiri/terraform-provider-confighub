@@ -198,6 +198,7 @@ func resourcePropertyDelete(ctx context.Context, d *schema.ResourceData, meta in
 	propertyIdParts := strings.Split(propertyId, "|")
 	propertyKey := propertyIdParts[0]
 	propertyContext := propertyIdParts[1]
+	vdt := d.Get("vdt").(string)
 
 	deletePropertyIdentifierValue := DeletePropertyIdentifierValue{
 		Context:   propertyContext,
@@ -205,6 +206,7 @@ func resourcePropertyDelete(ctx context.Context, d *schema.ResourceData, meta in
 	}
 	deletePropertyIdentifier := DeletePropertyIdentifier{
 		Key:    propertyKey,
+		Vdt:    vdt,
 		Values: []DeletePropertyIdentifierValue{deletePropertyIdentifierValue},
 	}
 	_, err := client.doDeleteProperty(deletePropertyIdentifier, client.headers.Clone())

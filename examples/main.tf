@@ -18,41 +18,41 @@ provider "confighub" {
 data "confighub_properties" "dev_demo_app_properties" {
   depends_on = [
     confighub_property.dev_demo_app_text_property,
-    confighub_property.dev_demo_app_list_property  
+    confighub_property.dev_demo_app_list_property
   ]
-  context    = "dev;demo-app"
+  context = "dev;demo-app"
 }
 
 resource "confighub_property" "dev_demo_app_text_property" {
-  key      = "text_value_test"
-  context  = "dev;demo-app"
-  value    = "This is a simple string"
+  key     = "text_value_test"
+  context = "dev;demo-app"
+  value   = "This is a simple string"
 }
 
 resource "confighub_property" "dev_demo_app_list_property" {
-  key      = "list_value_test"
-  context  = "dev;demo-app"
-  vdt = "List"
-  value    = jsonencode([
+  key     = "list_value_test"
+  context = "dev;demo-app"
+  vdt     = "List"
+  value = jsonencode([
     "Value 1",
     "Value 2"
   ])
 }
 
 resource "confighub_property" "dev_demo_app_map_property" {
-  key      = "map_value_test"
-  context  = "dev;demo-app"
-  vdt      = "Map"
-  value    = jsonencode({
+  key     = "map_value_test"
+  context = "dev;demo-app"
+  vdt     = "Map"
+  value = jsonencode({
     key_1 = "Key 1 Value",
     key_2 = "Key 2 Value"
   })
 }
 
 resource "confighub_file" "dev_demo_app_test_file" {
-  path     = "test_file"
-  context  = "dev;demo-app"
-  content  = "The content of the file"
+  path    = "test_file"
+  context = "dev;demo-app"
+  content = "The content of the file"
 }
 
 data "confighub_file" "dev_demo_app_test_file" {
