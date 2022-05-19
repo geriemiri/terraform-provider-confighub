@@ -11,6 +11,18 @@ func dataFileSchema() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataFileRead,
 		Schema: map[string]*schema.Schema{
+			"account": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"repository": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"client_token": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"context": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -47,24 +59,16 @@ func dataFileRead(ctx context.Context, d *schema.ResourceData, meta interface{})
 
 	context := d.Get("context").(string)
 	filePath := d.Get("path").(string)
-	applicationName := d.Get("application_name").(string)
-	tag := d.Get("tag").(string)
-	repositoryDate := d.Get("repository_date").(string)
 
-	headers := client.headers.Clone()
-	headers.Add("Context", context)
-	headers.Add("File", filePath)
-	if applicationName != "" {
-		headers.Add("Application-Name", applicationName)
-	}
-	if tag != "" {
-		headers.Add("Tag", tag)
-	}
-	if repositoryDate != "" {
-		headers.Add("Repository-Date", repositoryDate)
+	input := PullConfigFileInput{
+		Context:         context,
+		FilePath:        filePath,
+		ApplicationName: d.Get("application_name").(string),
+		Tag:             d.Get("tag").(string),
+		RepositoryDate:  d.Get("repository_date").(string),
 	}
 
-	fileContent, err := client.doPullConfigFile(headers)
+	fileContent, err := client.doPullConfigFile(input)
 
 	if err != nil {
 		return diag.Errorf("Error pulling file config %s for context %s: %s", filePath, context, err)

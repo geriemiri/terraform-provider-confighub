@@ -2,9 +2,9 @@
 # Manual edits may be lost in future updates.
 
 provider "confighub.com/terraform/confighub" {
-  version     = "0.0.1"
-  constraints = "0.0.1"
+  version     = "2.0.0"
+  constraints = "2.0.0"
   hashes = [
-    "h1:BMKO3U30kSwSANwBz2hBHicolGtU8oFH1WmR8cpfmLc=",
+    "h1:PqpoGZZgZHfOBYite1QR/HA0g6O4PhpXPGGsIK/KYlY=",
   ]
 }

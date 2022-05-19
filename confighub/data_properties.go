@@ -13,6 +13,18 @@ func dataPropertiesSchema() *schema.Resource {
 	return &schema.Resource{
 		ReadContext: dataPropertiesRead,
 		Schema: map[string]*schema.Schema{
+			"account": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"repository": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"client_token": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"context": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -29,14 +41,6 @@ func dataPropertiesSchema() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"account": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
-			"repo": {
-				Type:     schema.TypeString,
-				Computed: true,
-			},
 			"properties": {
 				Type:     schema.TypeMap,
 				Computed: true,
@@ -52,23 +56,15 @@ func dataPropertiesRead(ctx context.Context, d *schema.ResourceData, meta interf
 	client := provider.Client
 
 	context := d.Get("context").(string)
-	applicationName := d.Get("application_name").(string)
-	tag := d.Get("tag").(string)
-	repositoryDate := d.Get("repository_date").(string)
 
-	headers := client.headers.Clone()
-	headers.Add("Context", context)
-	if applicationName != "" {
-		headers.Add("Application-Name", applicationName)
-	}
-	if tag != "" {
-		headers.Add("Tag", tag)
-	}
-	if repositoryDate != "" {
-		headers.Add("Repository-Date", repositoryDate)
+	input := PullConfigPropertiesInput{
+		Context:         context,
+		ApplicationName: d.Get("application_name").(string),
+		Tag:             d.Get("tag").(string),
+		RepositoryDate:  d.Get("repository_date").(string),
 	}
 
-	objmap, err := client.doPullConfigProperties(headers)
+	objmap, err := client.doPullConfigProperties(input)
 
 	if err != nil {
 		return diag.Errorf("Error pulling configs: %s", err)
@@ -78,7 +74,7 @@ func dataPropertiesRead(ctx context.Context, d *schema.ResourceData, meta interf
 	repo := objmap["repo"].(string)
 	d.SetId(account + "|" + repo + "|" + context)
 	d.Set("account", account)
-	d.Set("repo", repo)
+	d.Set("repository", repo)
 
 	properties := make(map[string]string)
 
@@ -91,7 +87,7 @@ func dataPropertiesRead(ctx context.Context, d *schema.ResourceData, meta interf
 		case nil, "Boolean", "Integer", "Long", "Float", "Double", "FileRef", "FileEmbed", "JSON", "Code":
 			properties[key.String()] = propertyValue["val"].(string)
 		case "List", "Map":
-			propertyJson, err := json.MarshalIndent(propertyValue["val"], "", "\t")
+			propertyJson, err := json.Marshal(propertyValue["val"])
 			if err != nil {
 				return diag.Errorf("error for property %s context %s as List or Map: %s", key, context, err)
 			}

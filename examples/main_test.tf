@@ -1,17 +1,17 @@
 terraform {
   required_providers {
     confighub = {
-      version = "0.0.1"
+      version = "2.0.0"
       source  = "confighub.com/terraform/confighub"
     }
   }
 }
 
 provider "confighub" {
-  hostname     = "localhost"
-  scheme       = "http"
-  port         = 8080
-  client_token = "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJDb25maWdIdWIiLCJyaWQiOjYsInRzIjotNTQ0OTk5NDA3fQ.CkTMvi3bBYs69cJlbBG--coBybW9sbl6O4_das8cfL0"
+  hostname             = "localhost"
+  scheme               = "http"
+  port                 = 8080
+  default_client_token = "eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJDb25maWdIdWIiLCJyaWQiOjYsInRzIjotNTQ0OTk5NDA3fQ.CkTMvi3bBYs69cJlbBG--coBybW9sbl6O4_das8cfL0"
 }
 
 

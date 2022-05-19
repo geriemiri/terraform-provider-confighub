@@ -29,7 +29,6 @@ To run the e2e test use the following command at the root of the project:
 ```shell
 make e2e_test
 ```
-
 ## Publish manually
 
 Set the GPG_FINGERPRINT environment variable by checking with the following command:

@@ -2,8 +2,6 @@ package confighub
 
 import (
 	"context"
-	"log"
-	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -26,15 +24,15 @@ func Provider() *schema.Provider {
 				Optional: true,
 				Default:  "https",
 			},
-			"account": {
+			"default_account": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"repository": {
+			"default_repository": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"client_token": {
+			"default_client_token": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
@@ -57,13 +55,13 @@ func Provider() *schema.Provider {
 
 // ProviderClient holds metadata / config for use by Terraform resources
 type ProviderData struct {
-	Hostname      string
-	Scheme        string
-	Port          int
-	Account       string
-	Repository    string
-	ClientToken   string
-	ClientVersion string
+	Hostname           string
+	Scheme             string
+	Port               int
+	DefaultAccount     string
+	DefaultRepository  string
+	DefaultClientToken string
+	ClientVersion      string
 }
 
 type ProviderClient struct {
@@ -76,9 +74,9 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	hostname := d.Get("hostname").(string)
 	scheme := d.Get("scheme").(string)
 	port := d.Get("port").(int)
-	account := d.Get("account").(string)
-	repository := d.Get("repository").(string)
-	clientToken := d.Get("client_token").(string)
+	defaultAccount := d.Get("default_account").(string)
+	defaultRepository := d.Get("default_repository").(string)
+	defaultClientToken := d.Get("default_client_token").(string)
 
 	var diags diag.Diagnostics
 
@@ -86,38 +84,25 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 		return nil, diag.Errorf("scheme must be either http or https")
 	}
 
-	if (account == "" || repository == "") && clientToken == "" {
-		return nil, diag.Errorf("Either account and repository properties have to specified or client_token property has to be specified")
-	}
-
-	headers := make(http.Header)
-	headers.Set("Content-Type", "application/json")
-	headers.Set("Accept", "application/json")
-
-	if clientToken != "" {
-		headers.Set("Client-Token", clientToken)
+	if (defaultAccount == "" && defaultRepository != "") || (defaultAccount != "" && defaultRepository == "") {
+		return nil, diag.Errorf("Both default_account and default_repository properties have to specified")
 	}
 
 	clientVersion := d.Get("client_version").(string)
-	if clientVersion == "" {
-		log.Println("Using the latest client_version")
-	} else {
-		headers.Set("Client-Version", clientVersion)
-	}
 
 	providerData := ProviderData{
-		Hostname:      hostname,
-		Scheme:        scheme,
-		Port:          port,
-		Account:       account,
-		Repository:    repository,
-		ClientToken:   clientToken,
-		ClientVersion: clientVersion,
+		Hostname:           hostname,
+		Scheme:             scheme,
+		Port:               port,
+		DefaultAccount:     defaultAccount,
+		DefaultRepository:  defaultRepository,
+		DefaultClientToken: defaultClientToken,
+		ClientVersion:      clientVersion,
 	}
 	providerClient := ProviderClient{
 		ProviderData: &providerData,
 	}
-	providerClient.Client = NewClient(&providerData, headers)
+	providerClient.Client = NewClient(&providerData)
 
 	return providerClient, diags
 }

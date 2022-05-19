@@ -16,6 +16,18 @@ func resourceFile() *schema.Resource {
 		UpdateContext: resourceFileUpdate,
 		DeleteContext: resourceFileDelete,
 		Schema: map[string]*schema.Schema{
+			"account": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"repository": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"client_token": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"path": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -60,7 +72,7 @@ func resourceFileCreate(ctx context.Context, d *schema.ResourceData, meta interf
 		Context: d.Get("context").(string),
 		Content: d.Get("content").(string),
 	}
-	_, err := client.doPushConfigFile(pushConfigFile, client.headers.Clone())
+	_, err := client.doPushConfigFile(pushConfigFile, client.getRepoInfo(d))
 	if err != nil {
 		return diag.Errorf("Error pushing config file %s for context %s: %s", pushConfigFile.File, pushConfigFile.Context, err)
 	}
@@ -86,11 +98,13 @@ func resourceFileRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	d.Set("path", filePath)
 	d.Set("context", context)
 
-	headers := client.headers.Clone()
-	headers.Add("File", filePath)
-	headers.Add("Context", context)
+	input := PullConfigFileInput{
+		Context:  context,
+		FilePath: filePath,
+		RepoInfo: client.getRepoInfo(d),
+	}
 
-	content, err := client.doPullConfigFile(headers)
+	content, err := client.doPullConfigFile(input)
 
 	if err != nil {
 		return diag.Errorf("Error pulling config file %s for context %s: %s", filePath, context, err)
@@ -122,7 +136,7 @@ func resourceFileDelete(ctx context.Context, d *schema.ResourceData, meta interf
 		Context:   context,
 		Operation: "delete",
 	}
-	_, err := client.doDeleteFile(deleteFileIdentifier, client.headers.Clone())
+	_, err := client.doDeleteFile(deleteFileIdentifier, client.getRepoInfo(d))
 	if err != nil {
 		return diag.Errorf("Error deleting config file %s for context %s: %s", filePath, context, err)
 	}

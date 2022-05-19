@@ -9,8 +9,9 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 var UrlBase *string
@@ -20,11 +21,10 @@ type Client struct {
 	ProviderData *ProviderData
 	BaseUrl      *url.URL
 	httpClient   *http.Client
-	headers      http.Header
 }
 
 // NewClient initializes a new Client instance to communicate with the CMDB api
-func NewClient(providerData *ProviderData, h http.Header) *Client {
+func NewClient(providerData *ProviderData) *Client {
 	client := &Client{ProviderData: providerData}
 
 	client.httpClient = &http.Client{
@@ -44,34 +44,109 @@ func NewClient(providerData *ProviderData, h http.Header) *Client {
 		client.BaseUrl = u
 	}
 
-	if h != nil {
-		client.headers = h
-	}
-
 	return client
 }
 
-func (c *Client) constructFullUrl(path string) string {
+func (c *Client) constructFullUrl(path string, repoInfo RepoInfo) string {
 	url := ""
-	if c.ProviderData.Account != "" && c.ProviderData.Repository != "" {
-		url = fmt.Sprintf("%s%s/%s/%s", c.BaseUrl, path, c.ProviderData.Account, c.ProviderData.Repository)
+	account := c.ProviderData.DefaultAccount
+	if repoInfo.Account != "" {
+		account = repoInfo.Account
+	}
+	repository := c.ProviderData.DefaultRepository
+	if repoInfo.Repository != "" {
+		repository = repoInfo.Repository
+	}
+	if account != "" && repository != "" {
+		url = fmt.Sprintf("%s%s/%s/%s", c.BaseUrl, path, account, repository)
 	} else {
 		url = fmt.Sprintf("%s%s", c.BaseUrl, path)
 	}
 	return url
 }
 
+func (c *Client) getRepoInfo(d *schema.ResourceData) RepoInfo {
+	return RepoInfo{
+		Account:     d.Get("account").(string),
+		Repository:  d.Get("repository").(string),
+		ClientToken: d.Get("client_token").(string),
+	}
+}
+
+func (c *Client) populateHeaders(headers http.Header, clientToken string) {
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
+	if c.ProviderData.ClientVersion != "" {
+		headers.Set("Client-Version", c.ProviderData.ClientVersion)
+	}
+	if clientToken != "" {
+		headers.Set("Client-Token", clientToken)
+	} else if c.ProviderData.DefaultClientToken != "" {
+		headers.Set("Client-Token", c.ProviderData.DefaultClientToken)
+	}
+}
+
+func (c *Client) doHttpRequestWithRetry(req *http.Request, requestBody []byte, requestName string) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	for retry := 0; retry < 8 && (resp == nil || resp.StatusCode == 304); retry++ {
+		headers := req.Header.Clone()
+		req, err = http.NewRequest(req.Method, req.URL.String(), bytes.NewBuffer(requestBody))
+		req.Header = headers
+
+		if err != nil {
+			return nil, err
+		}
+		resp, err = c.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("unable to issue %s: %s", requestName, err.Error())
+		}
+
+		_, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse response from %s: %s", requestName, err.Error())
+		}
+		defer resp.Body.Close()
+		time.Sleep(time.Duration(math.Pow(2, float64(retry)+1)) * time.Second)
+	}
+
+	return resp, err
+}
+
+type RepoInfo struct {
+	Account     string
+	Repository  string
+	ClientToken string
+}
+
+type PullConfigPropertiesInput struct {
+	Context         string
+	ApplicationName string
+	Tag             string
+	RepositoryDate  string
+	RepoInfo        RepoInfo
+}
+
 // HTTP GET - /rest/pull
-func (c *Client) doPullConfigProperties(headers http.Header) (objmap map[string]interface{}, err error) {
-	url := c.constructFullUrl("/rest/pull")
+func (c *Client) doPullConfigProperties(input PullConfigPropertiesInput) (objmap map[string]interface{}, err error) {
+	url := c.constructFullUrl("/rest/pull", input.RepoInfo)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
+	c.populateHeaders(req.Header, input.RepoInfo.ClientToken)
+	req.Header.Add("Context", input.Context)
 	req.Header.Add("No-Files", "true")
+	if input.ApplicationName != "" {
+		req.Header.Add("Application-Name", input.ApplicationName)
+	}
+	if input.Tag != "" {
+		req.Header.Add("Tag", input.Tag)
+	}
+	if input.RepositoryDate != "" {
+		req.Header.Add("Repository-Date", input.RepositoryDate)
+	}
 
 	log.Printf("Calling %s\n", req.URL.String())
 
@@ -109,15 +184,24 @@ func (c *Client) doPullConfigProperties(headers http.Header) (objmap map[string]
 	return
 }
 
-func (c *Client) doPullConfigFile(headers http.Header) (fileContent string, err error) {
-	url := c.constructFullUrl("/rest/rawFile")
+type PullConfigFileInput struct {
+	FilePath        string
+	Context         string
+	ApplicationName string
+	Tag             string
+	RepositoryDate  string
+	RepoInfo        RepoInfo
+}
+
+func (c *Client) doPullConfigFile(input PullConfigFileInput) (fileContent string, err error) {
+	url := c.constructFullUrl("/rest/rawFile", input.RepoInfo)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
+	c.populateHeaders(req.Header, input.RepoInfo.ClientToken)
+	req.Header.Add("File", input.FilePath)
+	req.Header.Add("Context", input.Context)
 
 	log.Printf("Calling %s\n", req.URL.String())
 
@@ -170,13 +254,18 @@ type PushConfigRequest struct {
 	Data              []interface{} `json:"data"`
 }
 
+type PushConfigPropertyInput struct {
+	PushConfigProperty PushConfigProperty
+	RepoInfo           RepoInfo
+}
+
 // HTTP POST - /rest/push
-func (c *Client) doPushConfigProperty(pushConfigProperty PushConfigProperty, headers http.Header) (sucess bool, err error) {
-	url := c.constructFullUrl("/rest/push")
+func (c *Client) doPushConfigProperty(input PushConfigPropertyInput) (sucess bool, err error) {
+	url := c.constructFullUrl("/rest/push", input.RepoInfo)
 	pushConfigRequest := PushConfigRequest{
 		ChangeComment:     "Managed by Terraform",
 		EnableKeyCreation: true,
-		Data:              []interface{}{pushConfigProperty},
+		Data:              []interface{}{input.PushConfigProperty},
 	}
 	requestBody, err := json.Marshal(pushConfigRequest)
 	if err != nil {
@@ -186,27 +275,14 @@ func (c *Client) doPushConfigProperty(pushConfigProperty PushConfigProperty, hea
 	if err != nil {
 		return false, err
 	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
+	c.populateHeaders(req.Header, input.RepoInfo.ClientToken)
 
 	log.Printf("Calling %s\n", req.URL.String())
 
-	var resp *http.Response
-	var respError error
+	resp, respError := c.doHttpRequestWithRetry(req, requestBody, "property push request")
 
-	for retry := 0; retry < 3 && (resp == nil || resp.StatusCode == 304); retry++ {
-		resp, respError = c.httpClient.Do(req)
-		if respError != nil {
-			return false, fmt.Errorf("unable to issue property push request: %s", respError.Error())
-		}
-
-		_, respError = ioutil.ReadAll(resp.Body)
-		if respError != nil {
-			return false, fmt.Errorf("cannot parse response from property push request: %s", respError.Error())
-		}
-		defer resp.Body.Close()
-		time.Sleep(time.Duration(math.Pow(2, float64(retry)+1)) * time.Second)
+	if respError != nil {
+		return false, respError
 	}
 
 	if resp.StatusCode != 200 {
@@ -231,42 +307,39 @@ type DeletePropertyIdentifierValue struct {
 	Operation string `json:"opp"`
 }
 
-func (c *Client) doDeleteProperty(deletePropertyIdentifier DeletePropertyIdentifier, headers http.Header) (sucess bool, err error) {
-	url := c.constructFullUrl("/rest/push")
+func (c *Client) doDeleteProperty(deletePropertyIdentifier DeletePropertyIdentifier, repoInfo RepoInfo) (sucess bool, err error) {
+	url := c.constructFullUrl("/rest/push", repoInfo)
 	deletePropertyRequest := DeletePropertyRequest{
 		Data: []interface{}{deletePropertyIdentifier},
 	}
 	requestBody, err := json.Marshal(deletePropertyRequest)
+	log.Printf("Request Body %s", string(requestBody))
 	if err != nil {
 		return false, fmt.Errorf("unable to transform property delete request to JSON: %s", err.Error())
 	}
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return false, err
-	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
-
-	log.Printf("Calling %s\n", req.URL.String())
 
 	var resp *http.Response
-	var respError error
 
 	for retry := 0; retry < 3 && (resp == nil || resp.StatusCode == 304); retry++ {
-		resp, respError = c.httpClient.Do(req)
-		if respError != nil {
-			return false, fmt.Errorf("unable to issue property delete request: %s", respError.Error())
+		req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(requestBody))
+		if err != nil {
+			return false, err
+		}
+		c.populateHeaders(req.Header, repoInfo.ClientToken)
+		resp, err = c.httpClient.Do(req)
+		log.Printf("Calling %s\n", req.URL.String())
+		if err != nil {
+			return false, fmt.Errorf("unable to issue property delete request: %s", err.Error())
 		}
 
-		_, respError = ioutil.ReadAll(resp.Body)
+		_, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return false, fmt.Errorf("cannot parse response from property delete request: %s", respError.Error())
+			return false, fmt.Errorf("cannot parse response from property delete request: %s", err.Error())
 		}
 		defer resp.Body.Close()
 		time.Sleep(time.Duration(math.Pow(2, float64(retry))) * time.Second)
 		if resp.StatusCode == 304 && resp.Header.Get("Etag") == "A relationship to another item exists, preventing this transaction." {
-			return c.doDeletePropertyForAllContext(deletePropertyIdentifier.Key, headers)
+			return c.doDeletePropertyForAllContext(deletePropertyIdentifier.Key, repoInfo)
 		}
 	}
 
@@ -282,8 +355,8 @@ type DeletePropertyForAllContextIdentifier struct {
 	Operation string `json:"opp"`
 }
 
-func (c *Client) doDeletePropertyForAllContext(key string, headers http.Header) (sucess bool, err error) {
-	url := c.constructFullUrl("/rest/push")
+func (c *Client) doDeletePropertyForAllContext(key string, repoInfo RepoInfo) (sucess bool, err error) {
+	url := c.constructFullUrl("/rest/push", repoInfo)
 	deletePropertyForAllContextIdentifier := DeletePropertyForAllContextIdentifier{
 		Key: key,
 	}
@@ -291,6 +364,7 @@ func (c *Client) doDeletePropertyForAllContext(key string, headers http.Header) 
 		Data: []interface{}{deletePropertyForAllContextIdentifier},
 	}
 	requestBody, err := json.Marshal(deletePropertyRequest)
+	log.Printf("Request Body %s", string(requestBody))
 	if err != nil {
 		return false, fmt.Errorf("unable to transform property delete request to JSON: %s", err.Error())
 	}
@@ -298,27 +372,14 @@ func (c *Client) doDeletePropertyForAllContext(key string, headers http.Header) 
 	if err != nil {
 		return false, err
 	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
+	c.populateHeaders(req.Header, repoInfo.ClientToken)
 
 	log.Printf("Calling %s\n", req.URL.String())
 
-	var resp *http.Response
-	var respError error
+	resp, respError := c.doHttpRequestWithRetry(req, requestBody, "property delete request for all context")
 
-	for retry := 0; retry < 3 && (resp == nil || resp.StatusCode == 304); retry++ {
-		resp, respError = c.httpClient.Do(req)
-		if respError != nil {
-			return false, fmt.Errorf("unable to issue property delete request: %s", respError.Error())
-		}
-
-		_, respError = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return false, fmt.Errorf("cannot parse response from property delete request: %s", respError.Error())
-		}
-		defer resp.Body.Close()
-		time.Sleep(time.Duration(math.Pow(2, float64(retry))) * time.Second)
+	if respError != nil {
+		return false, respError
 	}
 
 	if resp.StatusCode != 200 {
@@ -335,14 +396,15 @@ type PushConfigFile struct {
 }
 
 // HTTP POST - /rest/push
-func (c *Client) doPushConfigFile(pushConfigFile PushConfigFile, headers http.Header) (sucess bool, err error) {
-	url := c.constructFullUrl("/rest/push")
+func (c *Client) doPushConfigFile(pushConfigFile PushConfigFile, repoInfo RepoInfo) (sucess bool, err error) {
+	url := c.constructFullUrl("/rest/push", repoInfo)
 	pushConfigRequest := PushConfigRequest{
 		ChangeComment:     "Managed by Terraform",
 		EnableKeyCreation: true,
 		Data:              []interface{}{pushConfigFile},
 	}
 	requestBody, err := json.Marshal(pushConfigRequest)
+	log.Printf("[INFO] Request Body %s", string(requestBody))
 	if err != nil {
 		return false, fmt.Errorf("unable to transform config pull request to JSON: %s", err.Error())
 	}
@@ -350,22 +412,15 @@ func (c *Client) doPushConfigFile(pushConfigFile PushConfigFile, headers http.He
 	if err != nil {
 		return false, err
 	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
+	c.populateHeaders(req.Header, repoInfo.ClientToken)
 
 	log.Printf("Calling %s\n", req.URL.String())
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("unable to issue file push request: %s", err.Error())
-	}
+	resp, respError := c.doHttpRequestWithRetry(req, requestBody, "file push request")
 
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("cannot parse response from file push request: %s", err.Error())
+	if respError != nil {
+		return false, respError
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		return false, fmt.Errorf("file push request returned HTTP status code %d: %s", resp.StatusCode, resp.Header.Get("Etag"))
@@ -380,12 +435,13 @@ type DeleteFileIdentifier struct {
 	Operation string `json:"opp"`
 }
 
-func (c *Client) doDeleteFile(deletePropertyIdentifier DeleteFileIdentifier, headers http.Header) (sucess bool, err error) {
-	url := c.constructFullUrl("/rest/push")
+func (c *Client) doDeleteFile(deletePropertyIdentifier DeleteFileIdentifier, repoInfo RepoInfo) (sucess bool, err error) {
+	url := c.constructFullUrl("/rest/push", repoInfo)
 	deletePropertyRequest := DeletePropertyRequest{
 		Data: []interface{}{deletePropertyIdentifier},
 	}
 	requestBody, err := json.Marshal(deletePropertyRequest)
+	log.Printf("Request Body %s", string(requestBody))
 	if err != nil {
 		return false, fmt.Errorf("unable to transform config pull request to JSON: %s", err.Error())
 	}
@@ -393,22 +449,15 @@ func (c *Client) doDeleteFile(deletePropertyIdentifier DeleteFileIdentifier, hea
 	if err != nil {
 		return false, err
 	}
-	for name, value := range headers {
-		req.Header.Add(name, strings.Join(value, ""))
-	}
+	c.populateHeaders(req.Header, repoInfo.ClientToken)
 
 	log.Printf("Calling %s\n", req.URL.String())
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("unable to issue file delete request: %s", err.Error())
-	}
+	resp, respError := c.doHttpRequestWithRetry(req, requestBody, "file delete request")
 
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("cannot parse response from file delete request: %s", err.Error())
+	if respError != nil {
+		return false, respError
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		return false, fmt.Errorf("file delete request returned HTTP status code %d: %s", resp.StatusCode, resp.Header.Get("Etag"))

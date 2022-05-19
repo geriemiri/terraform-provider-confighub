@@ -18,6 +18,18 @@ func resourceProperty() *schema.Resource {
 		UpdateContext: resourcePropertyUpdate,
 		DeleteContext: resourcePropertyDelete,
 		Schema: map[string]*schema.Schema{
+			"account": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"repository": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
+			"client_token": {
+				Type:     schema.TypeString,
+				Optional: true,
+			},
 			"key": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -111,9 +123,13 @@ func resourcePropertyCreate(ctx context.Context, d *schema.ResourceData, meta in
 		Password:      d.Get("password").(string),
 		Values:        pushConfigPropertyValues,
 	}
-	_, err := client.doPushConfigProperty(pushConfigProperty, client.headers.Clone())
+	input := PushConfigPropertyInput{
+		PushConfigProperty: pushConfigProperty,
+		RepoInfo:           client.getRepoInfo(d),
+	}
+	_, err := client.doPushConfigProperty(input)
 	if err != nil {
-		return diag.Errorf("Error pulling configs: %s", err)
+		return diag.Errorf("Error pushing configs: %s", err)
 	}
 	d.SetId(id)
 	return diags
@@ -137,10 +153,12 @@ func resourcePropertyRead(ctx context.Context, d *schema.ResourceData, meta inte
 	d.Set("key", propertyKey)
 	d.Set("context", propertyContext)
 
-	headers := client.headers.Clone()
-	headers.Add("Context", propertyContext)
+	input := PullConfigPropertiesInput{
+		Context:  propertyContext,
+		RepoInfo: client.getRepoInfo(d),
+	}
 
-	objmap, err := client.doPullConfigProperties(headers)
+	objmap, err := client.doPullConfigProperties(input)
 	log.Printf("[DEBUG] Key %s\n", objmap)
 
 	if err != nil {
@@ -209,7 +227,7 @@ func resourcePropertyDelete(ctx context.Context, d *schema.ResourceData, meta in
 		Vdt:    vdt,
 		Values: []DeletePropertyIdentifierValue{deletePropertyIdentifierValue},
 	}
-	_, err := client.doDeleteProperty(deletePropertyIdentifier, client.headers.Clone())
+	_, err := client.doDeleteProperty(deletePropertyIdentifier, client.getRepoInfo(d))
 	if err != nil {
 		return diag.Errorf("Error deleting property %s from context %s: %s", propertyKey, propertyContext, err)
 	}
