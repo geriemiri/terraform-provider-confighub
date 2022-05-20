@@ -60,6 +60,9 @@ The following arguments are required:
 
 The following arguments are optional:
 
+* `client_token` - (Optional) Client Token to authenticate the requests.
+* `account` - (Optional) Account name.
+* `repository` - (Optional) Repository name.
 * `vdt` - (Optional) The type of the property. Defaults to Text.
 * `readme` - (Optional) Description of the property.
 * `active` - (Optional) Boolean value, either `true` or `false` that denotes if the property is active or not. Defaults to `true`.

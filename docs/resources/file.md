@@ -29,6 +29,9 @@ The following arguments are required:
 
 The following arguments are optional:
 
+* `client_token` - (Optional) Client Token to authenticate the requests.
+* `account` - (Optional) Account name.
+* `repository` - (Optional) Repository name.
 * `application_name` - (Optional) Application name.
 * `security_group` - (Optional) Security group name that is used to encrypt the file.
 * `password` - (Optional) Password for the security group.
