@@ -50,6 +50,17 @@ resource "confighub_property" "dev_demo_app_map_property" {
 }
 ```
 
+## Property with its own client_token
+
+```terraform
+resource "confighub_property" "dev_demo_app_text_property" {
+  key          = "text_value_test"
+  context      = "dev;demo-app"
+  value        = "This is a simple string"
+  client_token = "kaPQWMOKAOCMGGPIFMasodiwm..."
+}
+```
+
 ## Argument Reference
 
 The following arguments are required:

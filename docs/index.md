@@ -25,8 +25,8 @@ provider "confighub" {
 The list of the arguments that the providers accepts:
 
 - `hostname` - (Required) Hostname of the ConfigHub server.
-- `default_account` - (Optional) The account through which the data is being accessed. This is not required if a `default_client_token` is specified. If `default_client_token` is missing, then both `default_account` and `default_repository` must be specified.
-- `default_client_token` - (Optional) The `default_client_token` is required if no `account` and `repository` is specified. This token uniquely identifies and authenticated a request to a specific ConfigHub repository.
+- `default_account` - (Optional) The default account through which the data is being accessed. It can be overriden at the resource or data source level. Is a required property, if `default_repository` is also defined.
+- `default_client_token` - (Optional) Specifies the default Client Token forThis token uniquely identifies and authenticated a request to a specific ConfigHub repository.
 - `port` - (Optional) The port used to send the requests.
 - `default_repository` - (Optional) The default repository to fetch the properties and files from. It has be specified if `default_account` is specified.
 - `scheme` - (Optional) Possible values are either **http** or **https**. Specifies if the requests will be made using HTTP or HTTPS respectively. Defaults to HTTPS.

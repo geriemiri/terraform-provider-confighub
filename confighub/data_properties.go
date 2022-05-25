@@ -62,6 +62,7 @@ func dataPropertiesRead(ctx context.Context, d *schema.ResourceData, meta interf
 		ApplicationName: d.Get("application_name").(string),
 		Tag:             d.Get("tag").(string),
 		RepositoryDate:  d.Get("repository_date").(string),
+		RepoInfo:        client.getRepoInfo(d),
 	}
 
 	objmap, err := client.doPullConfigProperties(input)

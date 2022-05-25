@@ -19,6 +19,17 @@ resource "confighub_file" "dev_demo_app_test_file" {
 }
 ```
 
+## File with its own client_token
+
+```terraform
+resource "confighub_file" "dev_demo_app_test_file" {
+  path          = "test_file"
+  context       = "dev;demo-app"
+  content       = "The content of the file"
+  client_token  = "owUDJauibMLQWmciwneorRPLQNDOncmvxjofwkemrowj..."
+}
+```
+
 ## Argument Reference
 
 The following arguments are required:

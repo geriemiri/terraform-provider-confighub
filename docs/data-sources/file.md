@@ -18,6 +18,15 @@ data "confighub_file" "dev_demo_app_test_file" {
 }
 ```
 
+## File data with its own client_token
+```terraform
+data "confighub_file" "dev_demo_app_test_file" {
+  path         = "test_file"
+  context      = "dev;demo-app"
+  client_token = "ODMQOEPMCMSsjaoiwfjapskdiidfdpwll.."
+}
+```
+
 ## Argument Reference
 
 * `context` - (Required) The domain of the certificate to look up. If no certificate is found with this name, an error will be returned.
