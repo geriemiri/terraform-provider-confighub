@@ -85,9 +85,10 @@ func dataPropertiesRead(ctx context.Context, d *schema.ResourceData, meta interf
 		value := propertiesReflexiveMap.MapIndex(key)
 		propertyValue := value.Interface().(map[string]interface{})
 		switch propertyValue["type"] {
-		case nil:
-		case "Boolean", "Integer", "Long", "Float", "Double", "FileRef", "FileEmbed", "JSON", "Code":
-			properties[key.String()] = propertyValue["val"].(string)
+		case nil, "Boolean", "Integer", "Long", "Float", "Double", "FileRef", "FileEmbed", "JSON", "Code":
+			if propertyValue["val"] != nil {
+				properties[key.String()] = propertyValue["val"].(string)
+			}
 		case "List", "Map":
 			propertyJson, err := json.Marshal(propertyValue["val"])
 			if err != nil {
