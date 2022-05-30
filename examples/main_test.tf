@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     confighub = {
-      version = "2.0.2"
+      version = "2.0.3"
       source  = "confighub.com/terraform/confighub"
     }
   }
@@ -29,6 +29,12 @@ resource "confighub_property" "dev_demo_app_text_property" {
   value   = "This is a simple string"
 }
 
+resource "confighub_property" "dev_demo_app_blank_text_property" {
+  key     = "blank_text_value_test"
+  context = "dev;demo-app"
+  value   = ""
+}
+
 resource "confighub_property" "dev_demo_app_list_property" {
   key     = "list_value_test"
   context = "dev;demo-app"
@@ -38,6 +44,14 @@ resource "confighub_property" "dev_demo_app_list_property" {
     "Value 2"
   ])
 }
+
+resource "confighub_property" "dev_demo_app_blank_list_property" {
+  key     = "blank_list_value_test"
+  context = "dev;demo-app"
+  vdt     = "List"
+  value   = jsonencode([])
+}
+
 
 resource "confighub_property" "dev_demo_app_map_property" {
   key     = "map_value_test"
@@ -49,11 +63,37 @@ resource "confighub_property" "dev_demo_app_map_property" {
   })
 }
 
+resource "confighub_property" "dev_demo_app_empty_map_property" {
+  key     = "empty_map_value_test"
+  context = "dev;demo-app"
+  vdt     = "Map"
+  value   = jsonencode({})
+}
+
 resource "confighub_file" "dev_demo_app_test_file" {
   path    = "test_file"
   context = "dev;demo-app"
   content = "The content of the file"
 }
+
+# Should error out
+# resource "confighub_property" "dev_demo_app_null_list_value_property" {
+#   key     = "null_list_property_value_test"
+#   context = "dev;demo-app"
+#   vdt     = "List"
+#   value   = jsonencode([null, null])
+# }
+
+# Should error out
+# resource "confighub_property" "dev_demo_app_null_map_value_property" {
+#   key     = "null_map_property_value_test"
+#   context = "dev;demo-app"
+#   vdt     = "List"
+#   value   = jsonencode({
+#     key_1 = "Key 1 Value",
+#     key_2 = null
+#   })
+# }
 
 data "confighub_file" "dev_demo_app_test_file" {
   depends_on = [confighub_file.dev_demo_app_test_file]

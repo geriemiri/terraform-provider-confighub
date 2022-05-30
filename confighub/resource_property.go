@@ -95,6 +95,7 @@ func resourceProperty() *schema.Resource {
 func resourcePropertyCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 
 	var diags diag.Diagnostics
+	var err error
 
 	provider := meta.(ProviderClient)
 	client := provider.Client
@@ -106,7 +107,27 @@ func resourcePropertyCreate(ctx context.Context, d *schema.ResourceData, meta in
 	if !isPropertyTypeValid(d.Get("vdt").(string)) {
 		return diag.Errorf("invalid vdt for property %s from context %s: %s", key, context, vdt)
 	}
-
+	var valueObj interface{}
+	err = json.Unmarshal([]byte(d.Get("value").(string)), &valueObj)
+	if err == nil {
+		valueObjTypeKind := reflect.TypeOf(valueObj).Kind()
+		if valueObjTypeKind == reflect.Slice {
+			valueList := valueObj.([]interface{})
+			for i, v := range valueList {
+				if v == nil {
+					return diag.Errorf("Error pushing configs: confighub property %s with type List has a null value in index %d", key, i)
+				}
+			}
+		} else if valueObjTypeKind == reflect.Map {
+			valueMap := valueObj.(map[string]interface{})
+			for k, v := range valueMap {
+				if v == nil {
+					return diag.Errorf("Error pushing configs: confighub property %s with type Map has a null value for key %s", key, k)
+				}
+			}
+		}
+	}
+	// return diag.Errorf("Error pushing configs: %+v", o1)
 	pushConfigPropertyValue := PushConfigPropertyValue{
 		Context: context,
 		Value:   d.Get("value").(string),
@@ -127,7 +148,7 @@ func resourcePropertyCreate(ctx context.Context, d *schema.ResourceData, meta in
 		PushConfigProperty: pushConfigProperty,
 		RepoInfo:           client.getRepoInfo(d),
 	}
-	_, err := client.doPushConfigProperty(input)
+	_, err = client.doPushConfigProperty(input)
 	if err != nil {
 		return diag.Errorf("Error pushing configs: %s", err)
 	}
@@ -181,7 +202,7 @@ func resourcePropertyRead(ctx context.Context, d *schema.ResourceData, meta inte
 				d.Set("vdt", "Text")
 			}
 			if propertyType == "List" || propertyType == "Map" {
-				propertyJson, err := json.MarshalIndent(propertyValue["val"], "", "\t")
+				propertyJson, err := json.Marshal(propertyValue["val"])
 				if err != nil {
 					return diag.Errorf("error for property %s context %s as List or Map: %s", propertyKey, propertyContext, err)
 				}
