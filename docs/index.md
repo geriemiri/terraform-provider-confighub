@@ -9,6 +9,9 @@ description: |-
 
 Provider for reading and writting configuration properties and files in ConfigHub.
 
+> **ATTENTION**:  This TF provider only works with the legacy open-source ConfigHub platform: https://github.com/ConfigHubPub/ConfigHubPlatform
+> The provider does not work with the new ConfigHub SaaS solution
+
 ## Example Usage
 
 ```hcl

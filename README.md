@@ -1,4 +1,4 @@
-# Terraform Provider ConfiHub
+# Terraform Provider ConfigHub
 
 Run the following command to build the provider
 
