@@ -3,7 +3,7 @@ HOSTNAME=confighub.com
 NAMESPACE=terraform
 NAME=confighub
 BINARY=terraform-provider-${NAME}
-VERSION=2.0.7
+VERSION=2.0.8
 OS_ARCH=linux_amd64
 
 default: install
